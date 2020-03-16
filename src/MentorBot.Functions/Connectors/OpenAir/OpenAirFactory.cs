@@ -1,6 +1,6 @@
 ﻿// Copyright (c) 2018. Licensed under the MIT License. See https://www.opensource.org/licenses/mit-license.php for full license information.
 
-using System;
+using System.Collections.Generic;
 using System.Linq;
 
 using MentorBot.Functions.Models.Domains;
@@ -26,7 +26,7 @@ namespace MentorBot.Functions.Connectors.OpenAir
            };
 
         /// <summary>Creates a <see cref="UserReference"/> model.</summary>
-        public static UserReference CreateUserReferenceById(long? userId, OpenAirClient.User[] users) =>
+        public static UserReference CreateUserReferenceById(long? userId, IEnumerable<OpenAirClient.User> users) =>
             userId.HasValue ? CreateUserReference(users.FirstOrDefault(it => it.Id == userId.Value)) : null;
 
         /// <summary>Creates a <see cref="UserReference"/> model.</summary>
@@ -40,7 +40,7 @@ namespace MentorBot.Functions.Connectors.OpenAir
             };
 
         /// <summary>Creates a <see cref="Department"/> model.</summary>
-        public static Department CreateDepartment(OpenAirClient.Department department, OpenAirClient.User[] users) =>
+        public static Department CreateDepartment(OpenAirClient.Department department, IEnumerable<OpenAirClient.User> users) =>
             department == null ? null :
             new Department
             {

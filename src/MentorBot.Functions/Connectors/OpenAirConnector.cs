@@ -42,14 +42,8 @@ namespace MentorBot.Functions.Connectors
             IReadOnlyList<string> filterByCustomers)
         {
             var toweek = date.AddDays(-(double)date.DayOfWeek);
-            var lastWeek = toweek.AddDays(-7);
-            var timesheets = new List<OpenAirClient.Timesheet>();
             var normalizedCustomerNames = filterByCustomers?.Select(NormalizeValue).ToArray();
-
-            timesheets.AddRange(await _client.GetTimesheetsByStatusAsync(lastWeek, lastWeek.AddDays(2), "A"));
-            timesheets.AddRange(await _client.GetTimesheetsByStatusAsync(toweek, date.AddDays(1), "S"));
-            timesheets.AddRange(await _client.GetTimesheetsByStatusAsync(toweek, date.AddDays(1), "A"));
-
+            var timesheets = await _client.GetTimesheetsAsync(toweek, date.AddDays(1));
             var timesheetsData = timesheets
                 .GroupBy(it => it.UserId)
                 .Select(it =>
@@ -73,30 +67,9 @@ namespace MentorBot.Functions.Connectors
                     !senderEmail.Equals(it.Email, StringComparison.InvariantCultureIgnoreCase))
                 .Where(it => it.Manager != null)
                 .Where(it =>
-                {
-                    try
-                    {
-                        return (it.Department?.Owner?.Email.Equals(senderEmail, StringComparison.InvariantCultureIgnoreCase) ?? false) ||
-                            IsManager(it, senderEmail, users, new List<string>());
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.Write(ex.Message);
-                        return false;
-                    }
-                })
-                .Where(it =>
-                {
-                    try
-                    {
-                        return FiterCustomersByNames(it.Customers, normalizedCustomerNames);
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.Write(ex.Message);
-                        return false;
-                    }
-                })
+                    (it.Department?.Owner?.Email.Equals(senderEmail, StringComparison.InvariantCultureIgnoreCase) ?? false) ||
+                    IsManager(it, senderEmail, users, new List<string>()))
+                .Where(it => FiterCustomersByNames(it.Customers, normalizedCustomerNames))
                 .Select(user =>
                 {
                     try

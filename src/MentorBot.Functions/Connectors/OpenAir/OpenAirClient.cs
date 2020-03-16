@@ -1,6 +1,7 @@
 ﻿// Copyright (c) 2018. Licensed under the MIT License. See https://www.opensource.org/licenses/mit-license.php for full license information.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
@@ -15,6 +16,8 @@ namespace MentorBot.Functions.Connectors.OpenAir
     /// <summary>An OpenAir client.</summary>
     public sealed partial class OpenAirClient : IOpenAirClient
     {
+        private const int MaxRequestCount = 1000;
+
         private readonly Func<HttpMessageHandler> _messageHandlerFactory;
         private readonly OpenAirOptions _options;
 
@@ -32,8 +35,8 @@ namespace MentorBot.Functions.Connectors.OpenAir
         }
 
         /// <summary>Gets the timesheets asynchronous.</summary>
-        public Task<Timesheet[]> GetTimesheetsAsync(DateTime startDate, DateTime endDate) =>
-            ReadAsync(
+        public Task<IReadOnlyList<Timesheet>> GetTimesheetsAsync(DateTime startDate, DateTime endDate) =>
+            ReadAllAsync(
                 new Read
                 {
                     Type = DateType.Timesheet,
@@ -51,55 +54,17 @@ namespace MentorBot.Functions.Connectors.OpenAir
                 },
                 result => result.Timesheet ?? new Timesheet[0]);
 
-        /// <summary>Gets the timesheets by status asynchronous.</summary>
-        public Task<Timesheet[]> GetTimesheetsByStatusAsync(DateTime startDate, DateTime endDate, string status) =>
-            ReadAsync(
-                new Read
-                {
-                    Type = DateType.Timesheet,
-                    Filter = "newer-than,older-than",
-                    Field = "starts,starts",
-                    Method = "equal to",
-                    Date = new[]
-                    {
-                        Date.Create(startDate),
-                        Date.Create(endDate),
-                    },
-                    Timesheet = new[]
-                    {
-                        new Timesheet { Status = status },
-                    },
-                    Return = new RaedReturn
-                    {
-                        Content = "<status/><name /><total/><notes /><userid /><starts />",
-                    },
-                },
-                result => result.Timesheet ?? new Timesheet[0]);
-
         /// <summary>Gets all users asynchronous.</summary>
-        public Task<User[]> GetAllUsersAsync() =>
-            Task.WhenAll(GetUsersByActiveAsync(true), GetUsersByActiveAsync(false))
-                .ContinueWith(task => task.Result.SelectMany(it => it).ToArray());
-
-        /// <summary>Gets all users by active flag asynchronous.</summary>
-        public Task<User[]> GetUsersByActiveAsync(bool active) =>
-            ReadAsync(
+        public Task<IReadOnlyList<User>> GetAllUsersAsync() =>
+            ReadAllAsync(
                 new Read
                 {
                     Type = DateType.User,
-                    Method = "equal to",
-                    Limit = 1000,
-                    User = new[]
-                    {
-                        new User
-                        {
-                            Active = active
-                        }
-                    },
+                    Method = "all",
                     Return = new RaedReturn
                     {
                         Content = "<id /><name /><addr /><departmentid /><active /><line_managerid /><user_locationid />"
-                    }
+                    },
                 },
                 result => result.User);
 
@@ -110,7 +75,7 @@ namespace MentorBot.Functions.Connectors.OpenAir
                 {
                     Type = DateType.Department,
                     Method = "all",
-                    Limit = 1000,
+                    Limit = MaxRequestCount,
                     Return = new RaedReturn
                     {
                         Content = "<id /><name /><userid />"
@@ -133,7 +98,7 @@ namespace MentorBot.Functions.Connectors.OpenAir
                 {
                     Type = DateType.Customer,
                     Method = "equal to",
-                    Limit = 1000,
+                    Limit = MaxRequestCount,
                     Filter = NotNullOf(from.HasValue ? "newer-than" : null, to.HasValue ? "older-than" : null).First(),
                     Field = "createtime",
                     Date = NotNullOf(
@@ -159,7 +124,7 @@ namespace MentorBot.Functions.Connectors.OpenAir
                 new Read
                 {
                     Type = DateType.Booking,
-                    Limit = 1000,
+                    Limit = MaxRequestCount,
                     Method = "equal to",
                     Filter = "newer-than,older-than",
                     Field = "enddate,startdate",
@@ -257,6 +222,24 @@ namespace MentorBot.Functions.Connectors.OpenAir
             var result = await ExecuteRequestAsync<Response>(_options.OpenAirUrl, req, _messageHandlerFactory).ConfigureAwait(false);
 
             return func(result.Read);
+        }
+
+        private async Task<IReadOnlyList<T>> ReadAllAsync<T>(Read read, Func<Read, T[]> func)
+        {
+            var currentRequestCount = 0;
+            var currentIndex = 0;
+            var items = new List<T>();
+            do
+            {
+                read.LimitAsText = $"{currentIndex},{MaxRequestCount}";
+                var result = await ReadAsync(read, func);
+                currentRequestCount = result.Length;
+                currentIndex += MaxRequestCount;
+                items.AddRange(result);
+            }
+            while (currentRequestCount >= MaxRequestCount);
+
+            return items;
         }
     }
 }

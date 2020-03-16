@@ -128,9 +128,17 @@ namespace MentorBot.Functions.Connectors.OpenAir
             [XmlAttribute("method")]
             public string Method { get; set; } = "all";
 
-            /// <summary>Gets or sets the limit.</summary>
+            /// <summary>Gets or sets the limit as text.</summary>
             [XmlAttribute("limit")]
-            public int Limit { get; set; } = 1000;
+            public string LimitAsText { get; set; } = "1000";
+
+            /// <summary>Gets or sets the limit.</summary>
+            [XmlIgnore]
+            public int Limit
+            {
+                get => int.Parse(LimitAsText, CultureInfo.InvariantCulture);
+                set => LimitAsText = value.ToString(CultureInfo.InvariantCulture);
+            }
 
             /// <summary>Gets or sets the dates.</summary>
             [XmlElement("Date", Order = 1)]
